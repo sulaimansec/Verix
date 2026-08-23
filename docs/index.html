@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verix</title>
+<meta name="description" content="Bilingual (EN/AR) overview of Verix — an autonomous, Claude-driven web vulnerability scanner. Architecture, real stats, bugs fixed, and results from live site scans.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ---- Tokens (deliberate single dark world — matches the shipped CLI/dashboard/report UI) ---- */
+  :root {
+    --bg: #0a0e18;
+    --surface: #131a2b;
+    --surface-2: #1a2338;
+    --border: #262f47;
+    --text: #eef1f8;
+    --muted: #8c93ab;
+    --accent: #22d3ee;
+    --accent-2: #8b7cf6;
+    --grade-a: #16a34a;
+    --grade-b: #1d4ed8;
+    --grade-c: #b45309;
+    --grade-d: #b91c1c;
+    --grade-f: #7f1d1d;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --display: "Sora", "Segoe UI", Arial, sans-serif;
+    --body-en: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    --body-ar: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-en);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  body[dir="rtl"] { font-family: var(--body-ar); }
+
+  h1, h2, h3, .display {
+    font-family: var(--display);
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] .display {
+    font-family: var(--body-ar);
+    letter-spacing: 0;
+  }
+  code, .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  a { color: var(--accent); }
+
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+  }
+
+  /* ---- language toggle ---- */
+  .langbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .langbar-inner {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0.75rem clamp(1.25rem, 4vw, 2.5rem);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px;
+    background: var(--surface);
+  }
+  .toggle button {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .toggle button.active { background: var(--accent); color: #04202a; font-weight: 600; }
+  .toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; }
+  section + section { border-top: 1px solid var(--border); }
+
+  /* ---- hero ---- */
+  .hero { padding-top: clamp(3rem, 8vw, 5rem); }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1rem;
+  }
+  .hero h1 { font-size: clamp(2.1rem, 5.5vw, 3.2rem); font-weight: 700; margin-bottom: 0.9rem; }
+  .hero .lede { font-size: 1.1rem; color: var(--muted); max-width: 60ch; margin-bottom: 2rem; }
+
+  .terminal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .terminal-bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--border); }
+  .terminal-bar .label { margin-inline-start: auto; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+  .terminal-body {
+    padding: 1.1rem 1.25rem 1.4rem;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: #b8c2dc;
+    min-height: 9.5em;
+  }
+  .terminal-body .line { opacity: 0; animation: reveal 0.35s ease forwards; white-space: pre-wrap; }
+  .terminal-body .ok { color: #6ee7b7; }
+  .terminal-body .prompt { color: var(--accent); }
+  .terminal-body .grade { color: #6ee7b7; font-weight: 700; }
+  .cursor { display: inline-block; width: 7px; height: 1em; background: var(--accent); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes reveal { to { opacity: 1; } }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .terminal-body .line { animation: none; opacity: 1; }
+    .cursor { animation: none; }
+  }
+
+  /* ---- pipeline ---- */
+  .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.9rem; }
+  @media (max-width: 760px) { .pipeline { grid-template-columns: 1fr 1fr; } }
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1rem;
+  }
+  .stage .n { font-family: var(--mono); color: var(--accent); font-size: 0.75rem; letter-spacing: 0.05em; }
+  .stage h3 { font-size: 0.95rem; margin: 0.5rem 0 0.35rem; font-weight: 600; }
+  .stage p { margin: 0; font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+  h2.section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.4rem; }
+  .section-sub { color: var(--muted); margin-bottom: 1.75rem; max-width: 62ch; }
+
+  /* ---- stats ---- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  @media (max-width: 700px) { .stats { grid-template-columns: 1fr 1fr; } }
+  .stat { background: var(--surface); padding: 1.4rem 1.2rem; }
+  .stat .v { font-family: var(--mono); font-size: 1.7rem; font-weight: 700; color: var(--text); }
+  .stat .l { font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; }
+
+  /* ---- findings list ---- */
+  .findings { display: flex; flex-direction: column; gap: 0.9rem; }
+  .finding {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-inline-start: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+  }
+  .finding .tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    height: fit-content;
+    white-space: nowrap;
+  }
+  .finding p { margin: 0; font-size: 0.9rem; }
+  .finding b { color: var(--text); }
+  .finding .fix { color: var(--muted); }
+
+  /* ---- report cards ---- */
+  .reports { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  @media (max-width: 700px) { .reports { grid-template-columns: 1fr; } }
+  .report-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem 1.4rem 1.5rem;
+  }
+  .report-card .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.9rem; }
+  .report-card .site { font-family: var(--mono); font-size: 0.95rem; }
+  .report-card .site a { color: var(--text); text-decoration: none; border-bottom: 1px dashed var(--border); }
+  .report-card .site a:hover { color: var(--accent); border-color: var(--accent); }
+  .grade-badge {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 1.1rem;
+    width: 2.3rem; height: 2.3rem;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .grade-a { background: var(--grade-a); }
+  .grade-b { background: var(--grade-b); }
+  .report-card .desc { font-size: 0.88rem; color: var(--muted); margin: 0 0 0.6rem; }
+  .report-card .note { font-size: 0.8rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 0.7rem; margin: 0.6rem 0 0; }
+
+  /* ---- footer / cta ---- */
+  footer { padding: clamp(2.5rem, 6vw, 4rem) 0 3.5rem; }
+  .cta {
+    display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.6rem 1.8rem;
+    margin-bottom: 1.5rem;
+  }
+  .cta h3 { font-size: 1.2rem; margin-bottom: 0.3rem; }
+  .cta p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .btn {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    background: var(--accent);
+    color: #04202a;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 0.7rem 1.3rem;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .foot-meta { font-size: 0.8rem; color: var(--muted); display: flex; gap: 1.2rem; flex-wrap: wrap; }
+  .foot-meta code { background: var(--surface); border: 1px solid var(--border); padding: 0.15rem 0.4rem; border-radius: 5px; font-size: 0.78rem; }
+
+  [dir="rtl"] .finding { border-inline-start: none; border-inline-end: 3px solid var(--accent); }
+  [dir="rtl"] .terminal-bar .label { margin-inline-start: 0; margin-inline-end: auto; }
+</style>
+</head>
+<body>
+
+<div class="langbar">
+  <div class="langbar-inner">
+    <div class="brand"><span class="dot"></span> Verix</div>
+    <div class="toggle" role="group" aria-label="Language">
+      <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
+      <button id="btn-ar" onclick="setLang('ar')">عربي</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= ENGLISH ============================= -->
+<div id="lang-en" lang="en" dir="ltr">
+  <div class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Autonomous security scanner</p>
+      <h1>Verix</h1>
+      <p class="lede">Claude drives the whole audit: it crawls the target, invents attack hypotheses, tests them with safe payloads, judges the results, and hands back a graded report — not a canned rule list.</p>
+      <div class="terminal">
+        <div class="terminal-bar"><span></span><span></span><span></span><span class="label">verix — real transcript</span></div>
+        <div class="terminal-body" id="term-en"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">How an audit runs</h2>
+      <p class="section-sub">Five stages, in order — recon feeds the model, the model's output drives the probes, the probes' results come back for judgment.</p>
+      <div class="pipeline">
+        <div class="stage"><div class="n">01</div><h3>Recon</h3><p>Playwright crawls pages, forms, headers, cookies, scripts — and fingerprints embedded chat/AI widgets.</p></div>
+        <div class="stage"><div class="n">02</div><h3>Hypotheses</h3><p>Claude proposes up to 12 attack vectors: OWASP Top 10, business logic, and LLM-specific risks.</p></div>
+        <div class="stage"><div class="n">03</div><h3>Safe probing</h3><p>Non-destructive payloads only, rate-limited, restricted to GET/POST/HEAD/OPTIONS by default.</p></div>
+        <div class="stage"><div class="n">04</div><h3>Analysis</h3><p>Every response goes back to Claude for a verdict: severity, CVSS, evidence, remediation.</p></div>
+        <div class="stage"><div class="n">05</div><h3>Report</h3><p>Graded A–F, grouped findings, saved to history for before/after comparison.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Built and proven, not just written</h2>
+      <p class="section-sub">Every number below is from the actual repository and real scans, not an estimate.</p>
+      <div class="stats">
+        <div class="stat"><div class="v">~1,250</div><div class="l">lines of Python, 10 files</div></div>
+        <div class="stat"><div class="v">9 / 9</div><div class="l">smoke tests passing</div></div>
+        <div class="stat"><div class="v">2</div><div class="l">front-ends, one shared engine</div></div>
+        <div class="stat"><div class="v">7</div><div class="l">dependencies, rest is stdlib</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Real bugs, found by real scans</h2>
+      <p class="section-sub">Each of these surfaced by actually running the tool against live sites, then was fixed at the root — not patched at the symptom.</p>
+      <div class="findings">
+        <div class="finding"><span class="tag">CRAWL</span><p><b>Healthy sites reported as unreachable.</b> <span class="fix">Playwright's <code>networkidle</code> wait never resolves on sites with analytics/chat traffic — switched to <code>domcontentloaded</code> as the real condition.</span></p></div>
+        <div class="finding"><span class="tag">CRASH</span><p><b>Empty recon crashed the whole scan.</b> <span class="fix">Claude's reply got cut off mid-JSON reasoning about nothing — AI probing is now skipped when recon finds zero pages, and truncation is detected and retried with more room.</span></p></div>
+        <div class="finding"><span class="tag">ACCURACY</span><p><b>Third-party assets blamed on the target.</b> <span class="fix">Header checks now run only against the target's own origin — a CDN's headers aren't the site's fault.</span></p></div>
+        <div class="finding"><span class="tag">HISTORY</span><p><b>Before/after could silently swap.</b> <span class="fix">Same-second scan saves sorted randomly — fixed with microsecond-resolution timestamps.</span></p></div>
+        <div class="finding"><span class="tag">UX</span><p><b>UTC timestamps read as wrong.</b> <span class="fix">Reports and history now show local time with its offset.</span></p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Validated on live sites</h2>
+      <p class="section-sub">Not synthetic test pages — my own production sites, scanned for real, published with the owner's go-ahead.</p>
+      <div class="reports">
+        <div class="report-card">
+          <div class="top"><span class="site"><a href="https://atsify.net" target="_blank" rel="noopener">atsify.net</a></span><span class="grade-badge grade-a">A</span></div>
+          <p class="desc">ATS Resume Builder SaaS, Next.js 16 — 0 findings across 7 pages. First scan caught a sitewide missing CSP header; fixed, and every re-scan since is clean.</p>
+        </div>
+        <div class="report-card">
+          <div class="top"><span class="site"><a href="https://iamsulaiman.dev" target="_blank" rel="noopener">iamsulaiman.dev</a></span><span class="grade-badge grade-b">B</span></div>
+          <p class="desc">Personal site, Cloudflare-fronted — 2 low-severity findings (missing CSP + HSTS) on a Cloudflare-injected script path, not the main page.</p>
+          <p class="note">Also surfaced a real limitation of any headless-browser scanner: Cloudflare's bot management intermittently resets automated connections regardless of User-Agent — confirmed by side-by-side testing against plain curl.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="cta">
+        <div><h3>Open source, MIT-style use</h3><p>Clone it, point it at something you're authorized to test.</p></div>
+        <a class="btn" href="https://github.com/sulaimansec/Verix" target="_blank" rel="noopener">github.com/sulaimansec/Verix →</a>
+      </div>
+      <div class="foot-meta">
+        <span><code>pip install -r requirements.txt</code></span>
+        <span><code>python cli.py</code></span>
+        <span><code>streamlit run app.py</code></span>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================== ARABIC ============================== -->
+<div id="lang-ar" lang="ar" dir="rtl" style="display:none;">
+  <div class="wrap">
+    <section class="hero">
+      <p class="eyebrow">أداة فحص أمني ذاتية القيادة</p>
+      <h1>Verix</h1>
+      <p class="lede">Claude يقود الفحص كامل: يزحف على الهدف، يخترع فرضيات هجوم، يختبرها بـ payloads آمنة، يحكم على النتائج، ويطلع تقرير مُقيّم — مو قائمة قواعد جاهزة وبس.</p>
+      <div class="terminal">
+        <div class="terminal-bar"><span></span><span></span><span></span><span class="label">verix — نسخة حقيقية من الفحص</span></div>
+        <div class="terminal-body" id="term-ar" dir="ltr" style="text-align:left;"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">كيف يشتغل الفحص</h2>
+      <p class="section-sub">خمس مراحل بالترتيب — الاستكشاف يغذّي النموذج، رد النموذج يوجّه الفحوصات، ونتائج الفحوصات ترجع للحكم عليها.</p>
+      <div class="pipeline">
+        <div class="stage"><div class="n">٠١</div><h3>الاستكشاف</h3><p>Playwright يزحف على الصفحات، الفورمز، الهيدرز، الكوكيز، السكربتات — ويكتشف أي شات بوت/AI widget مدمج.</p></div>
+        <div class="stage"><div class="n">٠٢</div><h3>الفرضيات</h3><p>Claude يقترح حتى 12 مسار هجوم: OWASP Top 10، منطق الأعمال، ومخاطر خاصة بالـ LLM.</p></div>
+        <div class="stage"><div class="n">٠٣</div><h3>فحص آمن</h3><p>payloads غير مدمّرة بس، بمعدل مضبوط، محصورة بـ GET/POST/HEAD/OPTIONS افتراضيًا.</p></div>
+        <div class="stage"><div class="n">٠٤</div><h3>التحليل</h3><p>كل رد يرجع لـ Claude يحدد: الخطورة، CVSS، الدليل، طريقة الإصلاح.</p></div>
+        <div class="stage"><div class="n">٠٥</div><h3>التقرير</h3><p>درجة من A إلى F، مشاكل مجمّعة، محفوظة بالسجل للمقارنة قبل/بعد.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">مبني ومُثبت، مو بس مكتوب</h2>
+      <p class="section-sub">كل رقم تحت من الريبو الفعلي وفحوصات حقيقية، مو تقدير.</p>
+      <div class="stats">
+        <div class="stat"><div class="v">١٬٢٥٠~</div><div class="l">سطر بايثون، 10 ملفات</div></div>
+        <div class="stat"><div class="v">٩ / ٩</div><div class="l">اختبارات ناجحة</div></div>
+        <div class="stat"><div class="v">٢</div><div class="l">واجهتين، محرك واحد مشترك</div></div>
+        <div class="stat"><div class="v">٧</div><div class="l">مكتبات فقط، الباقي قياسي</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">أخطاء حقيقية، من فحوصات حقيقية</h2>
+      <p class="section-sub">كل وحدة من هذي طلعت بتشغيل الأداة فعليًا على مواقع حية، وانصلحت من الجذر — مو ترقيع للعارض.</p>
+      <div class="findings">
+        <div class="finding"><span class="tag">زحف</span><p><b>مواقع سليمة تُقرأ كأنها ما تشتغل.</b> <span class="fix">انتظار <code>networkidle</code> ما يخلص على مواقع فيها تحليلات/شات — تحوّل لـ <code>domcontentloaded</code> كشرط حقيقي.</span></p></div>
+        <div class="finding"><span class="tag">كراش</span><p><b>استكشاف فاضي يكرّش الفحص كامل.</b> <span class="fix">رد Claude ينقطع نص الـ JSON وهو يخمّن من لا شي — الحين يتخطى استدعاء الذكاء الاصطناعي لو الاستكشاف طلع فاضي، مع اكتشاف الانقطاع وإعادة المحاولة.</span></p></div>
+        <div class="finding"><span class="tag">دقة</span><p><b>نطاقات خارجية تُحسب مشكلة بالهدف.</b> <span class="fix">فحص الهيدرز الحين بس على نطاق الهدف نفسه — هيدرز CDN مو مسؤولية الموقع.</span></p></div>
+        <div class="finding"><span class="tag">السجل</span><p><b>مقارنة قبل/بعد ممكن تنعكس بصمت.</b> <span class="fix">فحصين بنفس الثانية كانوا يترتبون عشوائي — انصلح بدقة الميكروثانية.</span></p></div>
+        <div class="finding"><span class="tag">تجربة</span><p><b>توقيت UTC يبين غلط.</b> <span class="fix">التقارير والسجل الحين بالتوقيت المحلي مع فرق التوقيت.</span></p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">مُختبر على مواقع حقيقية</h2>
+      <p class="section-sub">مو صفحات تجريبية — مواقعي الحقيقية بالإنتاج، فُحصت فعليًا، ومنشورة بموافقة صاحبها.</p>
+      <div class="reports">
+        <div class="report-card">
+          <div class="top"><span class="grade-badge grade-a">A</span><span class="site"><a href="https://atsify.net" target="_blank" rel="noopener">atsify.net</a></span></div>
+          <p class="desc">منصة ATS Resume Builder، Next.js 16 — 0 findings على 7 صفحات. أول فحص كشف CSP header ناقص بكل الموقع؛ انصلح، وكل فحص بعده نظيف.</p>
+        </div>
+        <div class="report-card">
+          <div class="top"><span class="grade-badge grade-b">B</span><span class="site"><a href="https://iamsulaiman.dev" target="_blank" rel="noopener">iamsulaiman.dev</a></span></div>
+          <p class="desc">موقعي الشخصي، خلف Cloudflare — مشكلتين منخفضتين (CSP و HSTS ناقصين) على مسار سكربت يحقنه Cloudflare نفسه، مو الصفحة الرئيسية.</p>
+          <p class="note">كشف كمان قيد حقيقي بأي أداة فحص تعتمد متصفح آلي: حماية Cloudflare توقف الاتصالات الآلية أحيانًا بغض النظر عن الـ User-Agent — تأكدت بمقارنة مباشرة مع curl.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="cta">
+        <div><h3>مفتوح المصدر</h3><p>استنسخه، وجّهه لأي هدف عندك صلاحية فحصه.</p></div>
+        <a class="btn" href="https://github.com/sulaimansec/Verix" target="_blank" rel="noopener">← github.com/sulaimansec/Verix</a>
+      </div>
+      <div class="foot-meta">
+        <span><code>pip install -r requirements.txt</code></span>
+        <span><code>python cli.py</code></span>
+        <span><code>streamlit run app.py</code></span>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script>
+  function typeTerminal(elId, lines) {
+    const el = document.getElementById(elId);
+    if (!el || el.dataset.done) return;
+    el.dataset.done = "1";
+    el.innerHTML = "";
+    let i = 0;
+    function next() {
+      if (i >= lines.length) {
+        const c = document.createElement("span");
+        c.className = "cursor";
+        el.appendChild(c);
+        return;
+      }
+      const div = document.createElement("div");
+      div.className = "line";
+      div.innerHTML = lines[i];
+      el.appendChild(div);
+      i++;
+      setTimeout(next, 320);
+    }
+    next();
+  }
+
+  const linesEN = [
+    '<span class="prompt">$</span> verix --target https://atsify.net --confirm-scope',
+    '▸ Crawling target (recon)...',
+    '▸ Recon done: 7 pages, 3 endpoints',
+    '▸ Running AI-driven vulnerability probes...',
+    '<span class="ok">▸ Scan done: 0 findings</span>',
+    'Overall Grade: <span class="grade">A</span>'
+  ];
+  const linesAR = [
+    '<span class="prompt">$</span> verix --target https://atsify.net --confirm-scope',
+    '&#9656; Crawling target (recon)...',
+    '&#9656; Recon done: 7 pages, 3 endpoints',
+    '&#9656; Running AI-driven vulnerability probes...',
+    '<span class="ok">&#9656; Scan done: 0 findings</span>',
+    'Overall Grade: <span class="grade">A</span>'
+  ];
+
+  function setLang(l) {
+    const isEn = l === 'en';
+    document.getElementById('lang-en').style.display = isEn ? '' : 'none';
+    document.getElementById('lang-ar').style.display = isEn ? 'none' : '';
+    document.getElementById('btn-en').classList.toggle('active', isEn);
+    document.getElementById('btn-ar').classList.toggle('active', !isEn);
+    document.body.setAttribute('dir', isEn ? 'ltr' : 'rtl');
+    document.documentElement.lang = isEn ? 'en' : 'ar';
+    if (isEn) typeTerminal('term-en', linesEN);
+    else typeTerminal('term-ar', linesAR);
+  }
+
+  typeTerminal('term-en', linesEN);
+</script>
+</body>
+</html>
