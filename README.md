@@ -106,9 +106,13 @@ In both cases, Claude's AI-driven probing (hypothesis generation → payload tes
 
 ### Install & run
 
+On Windows, `py` (the Python Launcher) is more reliably on PATH than bare `python`/`pip` —
+that's why the commands below use it. If plain `python`/`pip`/`streamlit` already work for
+you (macOS/Linux, or a Windows PATH you've set up), drop the `py -3 -m` prefix.
+
 ```bash
-pip install -r requirements.txt
-playwright install chromium
+py -3 -m pip install -r requirements.txt
+py -3 -m playwright install chromium
 ```
 
 `.env` (see `.env.example`):
@@ -119,13 +123,13 @@ ANTHROPIC_MODEL=claude-sonnet-5   # optional, this is the default
 
 ```bash
 # Interactive terminal
-python cli.py
+py -3 cli.py
 
 # Flag-driven
-python cli.py --target https://your-authorized-target.com --confirm-scope
+py -3 cli.py --target https://your-authorized-target.com --confirm-scope
 
 # Web dashboard
-streamlit run app.py
+py -3 -m streamlit run app.py
 ```
 
 Useful flags: `--depth`, `--no-ai-checks` (header checks only, free/instant), `--max-concurrency`, `--rate-limit`, `--allow-unsafe-methods` (off by default), `--output-dir`.
@@ -203,9 +207,13 @@ Useful flags: `--depth`, `--no-ai-checks` (header checks only, free/instant), `-
 
 ### التثبيت والتشغيل
 
+بويندوز، `py` (مشغّل بايثون) موجود على PATH بشكل أضمن من `python`/`pip` مباشرة — عشان
+كذا الأوامر تحت تستخدمه. لو `python`/`pip`/`streamlit` تشتغل عندك مباشرة (macOS/Linux، أو
+عدّلت PATH بويندوز)، احذف بادئة `py -3 -m`.
+
 ```bash
-pip install -r requirements.txt
-playwright install chromium
+py -3 -m pip install -r requirements.txt
+py -3 -m playwright install chromium
 ```
 
 ملف `.env` (شوف `.env.example`):
@@ -216,13 +224,13 @@ ANTHROPIC_MODEL=claude-sonnet-5   # اختياري، هذا الافتراضي
 
 ```bash
 # طرفية تفاعلية
-python cli.py
+py -3 cli.py
 
 # بأوامر مباشرة
-python cli.py --target https://your-authorized-target.com --confirm-scope
+py -3 cli.py --target https://your-authorized-target.com --confirm-scope
 
 # داشبورد ويب
-streamlit run app.py
+py -3 -m streamlit run app.py
 ```
 
 ### تصميم السلامة
