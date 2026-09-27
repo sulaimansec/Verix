@@ -68,7 +68,13 @@ st.set_page_config(page_title="Verix", page_icon="🛡️", layout="wide")
 # layout/widgets stay LTR — sliders, numbers, and controls end up visually scrambled.
 st.markdown(
     '<meta name="google" content="notranslate">'
-    '<style>html, body, .stApp { direction: ltr !important; }</style>',
+    '<style>'
+    'html, body, .stApp { direction: ltr !important; }'
+    # Streamlit/BaseWeb applies primaryColor to float sliders but not int sliders (a known
+    # theming inconsistency) — force every slider's fill/handle to match regardless of type.
+    'div[data-baseweb="slider"] div[role="slider"] { background-color: #22d3ee !important; }'
+    'div[data-baseweb="slider"] > div > div { background: #22d3ee !important; }'
+    '</style>',
     unsafe_allow_html=True,
 )
 
