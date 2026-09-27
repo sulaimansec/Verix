@@ -63,6 +63,15 @@ def _export_all_zip(md_report: str, html_report: str, findings) -> bytes:
 
 st.set_page_config(page_title="Verix", page_icon="🛡️", layout="wide")
 
+# UI is English-only by design. Without this, a browser set to auto-translate (e.g. Chrome
+# on an Arabic OS/browser locale) translates the text to Arabic (RTL) while Streamlit's own
+# layout/widgets stay LTR — sliders, numbers, and controls end up visually scrambled.
+st.markdown(
+    '<meta name="google" content="notranslate">'
+    '<style>html, body, .stApp { direction: ltr !important; }</style>',
+    unsafe_allow_html=True,
+)
+
 st.title("🛡️ Verix")
 st.caption("Autonomous, Claude-driven web + LLM vulnerability scanner — authorized testing only.")
 
